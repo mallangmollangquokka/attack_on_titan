@@ -6,19 +6,104 @@
   <title>진격의거인</title>
   <meta name="description" content="진격의 거인이란 무엇인가" />
   <style>
-    html, body { margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif; }
-    .wrap { max-width: 720px; margin: 0 auto; padding: 24px; line-height: 1.6; }
-    h1 { font-size: 2rem; margin: 0 0 0.75rem; }
-    p.lead { color: #444; margin-top: 0; }
-    ol { padding-left: 1.25rem; }
-    li { margin: 0.25rem 0; }
-    ul { padding-left: 1.25rem; }
-    .img { margin: 16px 0; text-align: center; }
-    .img img { max-width: 100%; height: auto; border-radius: 8px; }
-    .footer { margin-top: 32px; font-size: .9rem; color: #666; }
-    a { text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .note { background: #f7f7f9; border: 1px solid #eee; padding: 12px 14px; border-radius: 8px; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, Malgun Gothic, sans-serif;
+    }
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px;
+      line-height: 1.6;
+    }
+    h1 {
+      font-size: 2rem;
+      margin: 0 0 0.75rem;
+    }
+    p.lead {
+      color: #444;
+      margin-top: 0;
+    }
+    ol {
+      padding-left: 1.25rem;
+    }
+    li {
+      margin: 0.25rem 0;
+    }
+    ul {
+      padding-left: 1.25rem;
+    }
+    .img {
+      margin: 16px 0;
+      text-align: center;
+    }
+    .img img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: .9rem;
+      color: #666;
+    }
+    a {
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .note {
+      background: #f7f7f9;
+      border: 1px solid #eee;
+      padding: 12px 14px;
+      border-radius: 8px;
+    }
+
+    /* MQTT 표시용 스타일 */
+    .mqtt-box {
+      margin-top: 32px;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      background: #fafafa;
+      font-size: 0.95rem;
+    }
+    .mqtt-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .mqtt-status {
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+    .mqtt-status span {
+      font-weight: 600;
+    }
+    .mqtt-last {
+      margin: 8px 0;
+      padding: 8px 10px;
+      background: #ffffff;
+      border-radius: 6px;
+      border: 1px solid #e5e5e5;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .mqtt-log {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #ffffff;
+      border-radius: 6px;
+      border: 1px solid #e5e5e5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.85rem;
+    }
+    .mqtt-log-entry {
+      margin: 2px 0;
+    }
   </style>
 </head>
 <body>
@@ -36,16 +121,128 @@
     <div class="img">
       <img src="https://img1.newsis.com/2011/12/10/NISI20111210_0005575176_web.jpg" alt="진격의 거인 이미지">
     </div>
-   
-    
+
     <p class="note">
-     더 다양한 정보는
-     <a href="https://namu.wiki/w/진격의 거인" target="_blank" rel="noopener">진격의 거인 나무위키 문서</a>에서 확인하세요.
+      더 다양한 정보는
+      <a href="https://namu.wiki/w/진격의 거인" target="_blank" rel="noopener">진격의 거인 나무위키 문서</a>에서 확인하세요.
     </p>
+
+    <!-- MQTT 메시지 표시 영역 -->
+    <section class="mqtt-box">
+      <div class="mqtt-title">MQTT 실시간 메시지</div>
+      <div id="mqtt-status" class="mqtt-status">
+        상태: <span>초기화 중...</span>
+      </div>
+      <div id="mqtt-topic" class="mqtt-status">
+        구독 토픽: <code>ewha/2567018/attack_on_titan</code>
+      </div>
+      <div>
+        <strong>최근 수신 메시지</strong>
+        <div id="mqtt-last" class="mqtt-last">아직 수신된 메시지가 없습니다.</div>
+      </div>
+      <div>
+        <strong>메시지 로그</strong>
+        <div id="mqtt-log" class="mqtt-log">
+          <!-- 새 메시지가 위에 쌓이게 됨 -->
+        </div>
+      </div>
+    </section>
 
     <div class="footer">
       이 페이지는 GitHub Pages로 쉽게 배포할 수 있는 단일 HTML 예시입니다.
     </div>
   </main>
+
+  <!-- Paho MQTT JS (웹소켓 클라이언트) -->
+  <script src="https://unpkg.com/paho-mqtt/mqttws31.min.js"></script>
+  <script>
+    (function () {
+      // ====== 이 부분만 브로커 설정에 맞게 바꾸면 됨 ======
+      const host  = "damoa.io";                // MQTT 브로커 주소
+      const port  = 9001;                      // WebSocket 포트
+      const topic = "ewha/2567018/attack_on_titan"; // 구독할 토픽
+      const useTLS = false;                    // wss 쓸 때만 true
+      // ===============================================
+
+      const statusEl = document.getElementById("mqtt-status").querySelector("span");
+      const topicEl  = document.getElementById("mqtt-topic").querySelector("code");
+      const lastEl   = document.getElementById("mqtt-last");
+      const logEl    = document.getElementById("mqtt-log");
+
+      topicEl.textContent = topic;
+
+      let client = null;
+
+      function appendLog(text) {
+        const div = document.createElement("div");
+        div.className = "mqtt-log-entry";
+        div.textContent = text;
+        // 새 메시지가 위로 오도록
+        logEl.prepend(div);
+      }
+
+      function onConnect() {
+        statusEl.textContent = "연결됨 (" + host + ":" + port + ")";
+        try {
+          client.subscribe(topic);
+          appendLog("[INFO] Subscribed to: " + topic);
+        } catch (e) {
+          appendLog("[ERROR] subscribe 실패: " + e);
+        }
+      }
+
+      function onConnectionLost(responseObject) {
+        if (responseObject && responseObject.errorMessage) {
+          statusEl.textContent = "연결 끊김, 재연결 시도 중... (" + responseObject.errorMessage + ")";
+          appendLog("[WARN] Connection lost: " + responseObject.errorMessage);
+        } else {
+          statusEl.textContent = "연결 끊김, 재연결 시도 중...";
+          appendLog("[WARN] Connection lost (unknown reason)");
+        }
+        // 3초 후 재연결 시도
+        setTimeout(connectMQTT, 3000);
+      }
+
+      function onMessageArrived(message) {
+        const now = new Date().toLocaleTimeString();
+        const payload = message.payloadString;
+        const line = "[" + now + "] (" + message.destinationName + ") " + payload;
+
+        lastEl.textContent = line;
+        appendLog(line);
+      }
+
+      function connectMQTT() {
+        const clientId = "web-" + Math.random().toString(16).substr(2, 8);
+        statusEl.textContent = "연결 시도 중... (" + host + ":" + port + ", clientId=" + clientId + ")";
+
+        try {
+          // path를 따로 쓰지 않는 기본 형태 (브로커 설정에 따라 필요하면 인자에 path 추가)
+          client = new Paho.MQTT.Client(host, Number(port), clientId);
+
+          client.onConnectionLost = onConnectionLost;
+          client.onMessageArrived = onMessageArrived;
+
+          client.connect({
+            useSSL: useTLS,
+            timeout: 5,
+            onSuccess: onConnect,
+            onFailure: function (err) {
+              statusEl.textContent = "연결 실패: " + err.errorMessage + " (3초 후 재시도)";
+              appendLog("[ERROR] Connect failed: " + err.errorMessage);
+              setTimeout(connectMQTT, 3000);
+            }
+          });
+        } catch (e) {
+          statusEl.textContent = "연결 오류 발생: " + e;
+          appendLog("[ERROR] Exception: " + e);
+          setTimeout(connectMQTT, 3000);
+        }
+      }
+
+      // 페이지 로드되면 바로 연결 시도
+      connectMQTT();
+    })();
+  </script>
 </body>
 </html>
